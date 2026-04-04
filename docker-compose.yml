@@ -1,0 +1,25 @@
+services:
+  ntfy:
+    build: .
+    hostname: ntfy
+    ports:
+      - "9632:80"
+    expose:
+      - "9099/tcp"
+      - "9099/udp"
+    environment:
+      - NTFY_BASE_URL=http://localhost:80
+      - NTFY_DEFAULT_TOPIC=general
+      - PUBLIC_URL=http://localhost:9632
+    volumes:
+      - ntfy-cache:/var/cache/ntfy
+    networks:
+      - mcp-net
+    restart: unless-stopped
+
+volumes:
+  ntfy-cache:
+
+networks:
+  mcp-net:
+    external: true
