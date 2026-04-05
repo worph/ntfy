@@ -24,6 +24,11 @@ func main() {
 	mcpPort := envOrInt("MCP_PORT", 9099)
 	defaultTopic := envOr("NTFY_DEFAULT_TOPIC", "general")
 	authToken := os.Getenv("NTFY_AUTH_TOKEN")
+	if authToken == "" {
+		if data, err := os.ReadFile("/var/cache/ntfy/sidecar-token"); err == nil {
+			authToken = string(data)
+		}
+	}
 
 	client := ntfy.NewClient(ntfyURL, publicURL, authToken, defaultTopic)
 	toolDefs := mcpserver.GetToolDefinitions()
