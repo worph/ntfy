@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"mcp-sidecar/internal/beacon"
@@ -26,7 +27,7 @@ func main() {
 	authToken := os.Getenv("NTFY_AUTH_TOKEN")
 	if authToken == "" {
 		if data, err := os.ReadFile("/var/cache/ntfy/sidecar-token"); err == nil {
-			authToken = string(data)
+			authToken = strings.TrimSpace(string(data))
 		}
 	}
 
