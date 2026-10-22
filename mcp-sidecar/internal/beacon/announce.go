@@ -2,14 +2,25 @@ package beacon
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net"
 	"time"
 )
 
 const multicastGroup = "239.255.99.1"
+
+// ackMagic opens the 8-byte ack sent instead of the manifest when a discovery
+// request carries "ack": the magic, then the FNV-1a 32-bit hash of the
+// manifest, big-endian. Beacon then asks for the manifest 1:1 with
+// {"type":"manifest"} only when the hash is new. Full manifests answered to a
+// broadcast all land on Beacon at once and overflow its socket buffer; an ack
+// never can. A request without "ack" (an older Beacon) still gets the full
+// manifest. See beacon/sdk/node/mcp-announce.js.
+var ackMagic = []byte("BCNA")
 
 type announcePayload struct {
 	Type        string           `json:"type"`
@@ -35,6 +46,9 @@ func StartAnnouncer(ctx context.Context, tools []map[string]any, mcpPort int) er
 	if err != nil {
 		return err
 	}
+	h := fnv.New32a()
+	h.Write(data)
+	ack := binary.BigEndian.AppendUint32(append([]byte{}, ackMagic...), h.Sum32())
 
 	addr, err := net.ResolveUDPAddr("udp4", multicastGroup+":"+itoa(mcpPort))
 	if err != nil {
@@ -71,12 +85,18 @@ func StartAnnouncer(ctx context.Context, tools []map[string]any, mcpPort int) er
 		if json.Unmarshal(buf[:n], &msg) != nil {
 			continue
 		}
-		if msg["type"] != "discovery" {
+		reply := data
+		switch {
+		case msg["type"] == "manifest":
+		case msg["type"] == "discovery" && msg["ack"] != "":
+			log.Printf("Discovery request from %s, acking", sender.String())
+			reply = ack
+		case msg["type"] == "discovery":
+			log.Printf("Discovery request from %s, announcing...", sender.String())
+		default:
 			continue
 		}
-
-		log.Printf("Discovery request from %s, announcing...", sender.String())
-		if _, err := conn.WriteToUDP(data, sender); err != nil {
+		if _, err := conn.WriteToUDP(reply, sender); err != nil {
 			log.Printf("Failed to send announce: %v", err)
 		}
 	}
